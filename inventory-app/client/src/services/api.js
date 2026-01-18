@@ -1,29 +1,20 @@
-import axios from "axios";
-
-// Use a relative base URL by default so the app works
-// on any host (desktop, mobile, Vercel). For local
-// development, CRA's proxy will forward /api to the
-// Express server on localhost:4000. In production,
-// you can override this with REACT_APP_API_BASE.
-const api = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE || "/api",
-});
+// This module is currently a no-op stub.
+// The app now stores inventory entirely in
+// browser localStorage via useInventory,
+// so no network calls are required.
 
 export async function fetchItems() {
-  const res = await api.get("/items");
-  return res.data;
+  return [];
 }
 
 export async function createItem(payload) {
-  const res = await api.post("/items", payload);
-  return res.data;
+  return { ...payload };
 }
 
 export async function updateItem(id, payload) {
-  const res = await api.put(`/items/${id}`, payload);
-  return res.data;
+  return { id, ...payload };
 }
 
 export async function deleteItem(id) {
-  await api.delete(`/items/${id}`);
+  return;
 }
