@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  fetchItems,
-  createItem,
-  updateItem,
-  deleteItem,
-} from "../services/api";
 
 const PAGE_SIZE = 25;
+const STORAGE_KEY = "inventory-items";
 
 export function useInventory() {
   const [items, setItems] = useState([]);
@@ -26,25 +21,36 @@ export function useInventory() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const loadItems = async () => {
-    setLoading(true);
-    setError(null);
+  const loadFromStorage = () => {
     try {
-      const data = await fetchItems();
-      // Ensure we always store an array so downstream
-      // logic using .filter and .map cannot crash.
-      setItems(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load inventory.");
-      showNotification("error", "Failed to load inventory.");
-    } finally {
-      setLoading(false);
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        setItems([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setItems(Array.isArray(parsed) ? parsed : []);
+    } catch (e) {
+      console.error("Failed to read inventory from storage", e);
+      setItems([]);
+      setError("Failed to read saved inventory.");
+      showNotification("error", "Failed to read saved inventory.");
+    }
+  };
+
+  const saveToStorage = (nextItems) => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextItems));
+    } catch (e) {
+      console.error("Failed to save inventory to storage", e);
+      showNotification("error", "Failed to save inventory locally.");
     }
   };
 
   useEffect(() => {
-    loadItems();
+    setLoading(true);
+    loadFromStorage();
+    setLoading(false);
   }, []);
 
   const filteredItems = useMemo(() => {
@@ -83,40 +89,66 @@ export function useInventory() {
   };
 
   const handleSaveItem = async (item) => {
-    try {
-      if (editingItem) {
-        await updateItem(editingItem.id, item);
-        showNotification("success", "Item updated successfully.");
-      } else {
-        await createItem(item);
-        showNotification("success", "Item created successfully.");
-      }
-      await loadItems();
-      handleCloseModal();
-    } catch (err) {
-      if (err.response && err.response.status === 400) {
-        const details = err.response.data?.error?.details || [
-          "Validation error",
-        ];
-        const message = details.join(" ");
-        showNotification("error", message);
-      } else {
-        showNotification("error", "Failed to save item.");
-      }
+    const serial = typeof item.serialNumber === "string" ? item.serialNumber.trim() : "";
+    if (!serial) {
+      showNotification("error", "Serial number is required.");
+      return;
     }
+
+    const lowerSerial = serial.toLowerCase();
+    const duplicate = items.find(
+      (i) =>
+        i.serialNumber &&
+        i.serialNumber.toLowerCase() === lowerSerial &&
+        (!editingItem || i.id !== editingItem.id)
+    );
+
+    if (duplicate) {
+      showNotification("error", "An item with this serial number already exists.");
+      return;
+    }
+
+    const nextItems = [...items];
+
+    if (editingItem) {
+      const index = nextItems.findIndex((i) => i.id === editingItem.id);
+      if (index !== -1) {
+        nextItems[index] = {
+          ...nextItems[index],
+          serialNumber: serial,
+          category: item.category,
+          name: item.name ?? "",
+        };
+      }
+      showNotification("success", "Item updated successfully.");
+    } else {
+      const id =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      nextItems.push({
+        id,
+        serialNumber: serial,
+        category: item.category,
+        name: item.name ?? "",
+        description: "",
+      });
+      showNotification("success", "Item created successfully.");
+    }
+
+    setItems(nextItems);
+    saveToStorage(nextItems);
+    handleCloseModal();
   };
 
   const handleDeleteItem = async (id) => {
     if (!window.confirm("Are you sure you want to delete this item?")) {
       return;
     }
-    try {
-      await deleteItem(id);
-      showNotification("success", "Item deleted.");
-      await loadItems();
-    } catch (err) {
-      showNotification("error", "Failed to delete item.");
-    }
+    const nextItems = items.filter((i) => i.id !== id);
+    setItems(nextItems);
+    saveToStorage(nextItems);
+    showNotification("success", "Item deleted.");
   };
 
   const categoryCounts = useMemo(() => {
@@ -152,6 +184,6 @@ export function useInventory() {
     handleSaveItem,
     handleDeleteItem,
     categoryCounts,
-    reload: loadItems,
+		reload: loadFromStorage,
   };
 }
