@@ -31,7 +31,9 @@ export function useInventory() {
     setError(null);
     try {
       const data = await fetchItems();
-      setItems(data);
+      // Ensure we always store an array so downstream
+      // logic using .filter and .map cannot crash.
+      setItems(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
       setError("Failed to load inventory.");

@@ -1,2 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<inventory/>
+<inventory>
+  <item>
+    <id>2ccad84e-31a9-470a-8c7a-4da3967e3eaa</id>
+    <serialNumber>987213jd</serialNumber>
+    <category>monitor</category>
+    <name/>
+    <description/>
+  </item>
+</inventory>
