@@ -1,55 +1,44 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { parseStringPromise, Builder } from "xml2js";
 import { v4 as uuidv4 } from "uuid";
 import { acquireLock, releaseLock } from "../utils/fileLock.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dataFilePath = path.join(__dirname, "..", "..", "inventory.xml");
+const dataFilePath = path.join(__dirname, "..", "..", "inventory.json");
 
 async function ensureFileExists() {
   if (!fs.existsSync(dataFilePath)) {
-    const builder = new Builder();
-    const xml = builder.buildObject({ inventory: { item: [] } });
-    fs.writeFileSync(dataFilePath, xml, "utf-8");
+    await fs.promises.writeFile(dataFilePath, "[]", "utf-8");
   }
 }
 
-async function readXml() {
+async function readJson() {
   await ensureFileExists();
-  const xml = await fs.promises.readFile(dataFilePath, "utf-8");
-  const parsed = await parseStringPromise(xml, { explicitArray: false });
-  const items = parsed.inventory && parsed.inventory.item
-    ? Array.isArray(parsed.inventory.item)
-      ? parsed.inventory.item
-      : [parsed.inventory.item]
-    : [];
-  return items.map(normalizeItem);
+  const raw = await fs.promises.readFile(dataFilePath, "utf-8");
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    // If file is corrupted, reset to empty array instead of crashing.
+    return [];
+  }
 }
 
-async function writeXml(items) {
-  const builder = new Builder();
-  const xml = builder.buildObject({ inventory: { item: items } });
-  await fs.promises.writeFile(dataFilePath, xml, "utf-8");
-}
-
-function normalizeItem(raw) {
-  return {
-    id: raw.id,
-    serialNumber: raw.serialNumber,
-    category: raw.category,
-    name: raw.name ?? "",
-    description: raw.description ?? "",
-  };
+async function writeJson(items) {
+  await fs.promises.writeFile(
+    dataFilePath,
+    JSON.stringify(items, null, 2),
+    "utf-8"
+  );
 }
 
 export async function readAllItems() {
   await acquireLock(dataFilePath);
   try {
-    return await readXml();
+    return await readJson();
   } finally {
     await releaseLock(dataFilePath);
   }
@@ -63,7 +52,7 @@ export async function readItemById(id) {
 export async function createNewItem(payload) {
   await acquireLock(dataFilePath);
   try {
-    const items = await readXml();
+    const items = await readJson();
     const newItem = {
       id: uuidv4(),
       serialNumber: payload.serialNumber.trim(),
@@ -72,7 +61,7 @@ export async function createNewItem(payload) {
       description: payload.description ?? "",
     };
     items.push(newItem);
-    await writeXml(items);
+    await writeJson(items);
     return newItem;
   } finally {
     await releaseLock(dataFilePath);
@@ -82,7 +71,7 @@ export async function createNewItem(payload) {
 export async function updateExistingItem(id, payload) {
   await acquireLock(dataFilePath);
   try {
-    const items = await readXml();
+    const items = await readJson();
     const index = items.findIndex((i) => i.id === id);
     if (index === -1) return null;
     const existing = items[index];
@@ -94,7 +83,7 @@ export async function updateExistingItem(id, payload) {
       description: payload.description ?? "",
     };
     items[index] = updated;
-    await writeXml(items);
+    await writeJson(items);
     return updated;
   } finally {
     await releaseLock(dataFilePath);
@@ -104,11 +93,11 @@ export async function updateExistingItem(id, payload) {
 export async function deleteExistingItem(id) {
   await acquireLock(dataFilePath);
   try {
-    const items = await readXml();
+    const items = await readJson();
     const index = items.findIndex((i) => i.id === id);
     if (index === -1) return false;
     items.splice(index, 1);
-    await writeXml(items);
+    await writeJson(items);
     return true;
   } finally {
     await releaseLock(dataFilePath);
