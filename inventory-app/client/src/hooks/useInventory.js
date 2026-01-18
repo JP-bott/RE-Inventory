@@ -48,8 +48,9 @@ export function useInventory() {
   }, []);
 
   const filteredItems = useMemo(() => {
+    const safeItems = Array.isArray(items) ? items : [];
     const term = search.trim().toLowerCase();
-    return items.filter((item) => {
+    return safeItems.filter((item) => {
       const matchesCategory =
         categoryFilter === "all" || item.category === categoryFilter;
       const matchesSearch = !term
@@ -119,9 +120,10 @@ export function useInventory() {
   };
 
   const categoryCounts = useMemo(() => {
-    const counts = { all: items.length };
+    const safeItems = Array.isArray(items) ? items : [];
+    const counts = { all: safeItems.length };
     ["monitor", "pc", "ups", "keyboard", "mouse"].forEach((cat) => {
-      counts[cat] = items.filter((i) => i.category === cat).length;
+      counts[cat] = safeItems.filter((i) => i.category === cat).length;
     });
     return counts;
   }, [items]);
