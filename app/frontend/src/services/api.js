@@ -1,4 +1,5 @@
-const BASE_URL = '/api/items';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const BASE_URL = `${API_BASE}/api/items`;
 
 async function handleResponse(response) {
   const contentType = response.headers.get('content-type');
